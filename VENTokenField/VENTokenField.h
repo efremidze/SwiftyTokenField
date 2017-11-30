@@ -72,7 +72,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property (assign, nonatomic, nullable) UIView *inputTextFieldAccessoryView;
 @property (strong, nonatomic) UIColor *toLabelTextColor;
 @property (strong, nonatomic, nullable) NSString *toLabelText;
+@property (strong, nonatomic) UIFont *inputTextFieldFont;
 @property (strong, nonatomic) UIColor *inputTextFieldTextColor;
+@property (strong, nonatomic) UIFont *tokenFont;
 
 @property (strong, nonatomic) UILabel *toLabel;
 
@@ -80,7 +82,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (copy, nonatomic, nullable) NSString *placeholderText;
 @property (copy, nonatomic, nullable) NSString *inputTextFieldAccessibilityLabel;
 
-- (void)setColorScheme:(UIColor *)color;
+- (void)setColorScheme:(UIColor *)color DEPRECATED_ATTRIBUTE;
 
 @end
 

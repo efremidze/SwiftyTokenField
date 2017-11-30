@@ -42,7 +42,6 @@ static const CGFloat VENTokenFieldDefaultMaxHeight          = 150.0;
 @property (strong, nonatomic) UITapGestureRecognizer *tapGestureRecognizer;
 @property (strong, nonatomic) VENBackspaceTextField *invisibleTextField;
 @property (strong, nonatomic) VENBackspaceTextField *inputTextField;
-@property (strong, nonatomic) UIColor *colorScheme;
 @property (strong, nonatomic) UILabel *collapsedLabel;
 
 @end
@@ -92,7 +91,7 @@ static const CGFloat VENTokenFieldDefaultMaxHeight          = 150.0;
     self.horizontalInset = VENTokenFieldDefaultHorizontalInset;
     self.tokenPadding = VENTokenFieldDefaultTokenPadding;
     self.minInputWidth = VENTokenFieldDefaultMinInputWidth;
-    self.colorScheme = [UIColor blueColor];
+    self.tokenFont = [UIFont fontWithName:@"HelveticaNeue" size:15.5];
     self.toLabelTextColor = [UIColor colorWithRed:112/255.0f green:124/255.0f blue:124/255.0f alpha:1.0f];
     self.inputTextFieldTextColor = [UIColor colorWithRed:38/255.0f green:39/255.0f blue:41/255.0f alpha:1.0f];
     
@@ -129,6 +128,12 @@ static const CGFloat VENTokenFieldDefaultMaxHeight          = 150.0;
     self.inputTextField.accessibilityLabel = _inputTextFieldAccessibilityLabel;
 }
 
+- (void)setInputTextFieldFont:(UIFont *)inputTextFieldFont
+{
+    _inputTextFieldFont = inputTextFieldFont;
+    self.inputTextField.font = inputTextFieldFont;
+}
+
 - (void)setInputTextFieldTextColor:(UIColor *)inputTextFieldTextColor
 {
     _inputTextFieldTextColor = inputTextFieldTextColor;
@@ -147,14 +152,24 @@ static const CGFloat VENTokenFieldDefaultMaxHeight          = 150.0;
     [self reloadData];
 }
 
+- (void)tintColorDidChange
+{
+    self.collapsedLabel.textColor = self.tintColor;
+    self.inputTextField.tintColor = self.tintColor;
+}
+
+- (UIColor *)colorScheme {
+    return self.tintColor;
+}
+
 - (void)setColorScheme:(UIColor *)color
 {
-    _colorScheme = color;
-    self.collapsedLabel.textColor = color;
-    self.inputTextField.tintColor = color;
-    for (VENToken *token in self.tokens) {
-        [token setColorScheme:color];
-    }
+    self.tintColor = color;
+}
+
+- (void)setTokenFont:(UIFont *)tokenFont {
+    _tokenFont = tokenFont;
+    [self setNeedsLayout];
 }
 
 - (void)setInputTextFieldAccessoryView:(UIView *)inputTextFieldAccessoryView
@@ -262,7 +277,7 @@ static const CGFloat VENTokenFieldDefaultMaxHeight          = 150.0;
         inputTextField.text = @"";
     }
     inputTextField.frame = CGRectMake(*currentX, *currentY + 1, inputTextFieldWidth, [self heightForToken] - 1);
-    inputTextField.tintColor = self.colorScheme;
+    inputTextField.tintColor = self.tintColor;
     [self.scrollView addSubview:inputTextField];
 }
 
@@ -271,7 +286,7 @@ static const CGFloat VENTokenFieldDefaultMaxHeight          = 150.0;
     UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(*currentX, CGRectGetMinY(self.toLabel.frame), self.width - *currentX - self.horizontalInset, self.toLabel.height)];
     label.font = [UIFont fontWithName:@"HelveticaNeue" size:15.5];
     label.text = [self collapsedText];
-    label.textColor = self.colorScheme;
+    label.textColor = self.tintColor;
     label.minimumScaleFactor = 5./label.font.pointSize;
     label.adjustsFontSizeToFitWidth = YES;
     [self addSubview:label];
@@ -300,6 +315,8 @@ static const CGFloat VENTokenFieldDefaultMaxHeight          = 150.0;
     for (NSUInteger i = 0; i < [self numberOfTokens]; i++) {
         NSString *title = [self titleForTokenAtIndex:i];
         VENToken *token = [[VENToken alloc] init];
+        token.font = self.tokenFont;
+        token.tintColor = self.tintColor;
 
         __weak VENToken *weakToken = token;
         __weak VENTokenField *weakSelf = self;
@@ -341,6 +358,7 @@ static const CGFloat VENTokenFieldDefaultMaxHeight          = 150.0;
     self.invisibleTextField = [[VENBackspaceTextField alloc] initWithFrame:CGRectZero];
     [self.invisibleTextField setAutocorrectionType:self.autocorrectionType];
     [self.invisibleTextField setAutocapitalizationType:self.autocapitalizationType];
+    self.invisibleTextField.delegate = self;
     self.invisibleTextField.backspaceDelegate = self;
     [self addSubview:self.invisibleTextField];
 }
@@ -407,7 +425,9 @@ static const CGFloat VENTokenFieldDefaultMaxHeight          = 150.0;
         _inputTextField.font = [UIFont fontWithName:@"HelveticaNeue" size:15.5];
         _inputTextField.autocorrectionType = self.autocorrectionType;
         _inputTextField.autocapitalizationType = self.autocapitalizationType;
-        _inputTextField.tintColor = self.colorScheme;
+        _inputTextField.accessibilityLabel = NSLocalizedString(@"To", nil);
+        _inputTextField.autocorrectionType = UITextAutocorrectionTypeNo;
+        _inputTextField.tintColor = self.tintColor;
         _inputTextField.delegate = self;
         _inputTextField.backspaceDelegate = self;
         _inputTextField.placeholder = self.placeholderText;
@@ -564,8 +584,35 @@ static const CGFloat VENTokenFieldDefaultMaxHeight          = 150.0;
     }
 }
 
+- (BOOL)textFieldShouldEndEditing:(UITextField *)textField
+{
+    if (textField != self.inputTextField) {
+        return YES;
+    } else {
+        BOOL didEnterBackspace = NO;
+        for (VENToken *token in self.tokens) {
+            if (token.highlighted) {
+                didEnterBackspace = YES;
+            }
+        }
+        if (!didEnterBackspace) {
+            [self becomeFirstResponder];
+        } else {
+            [self setCursorVisibility];
+        }
+        return NO;
+    }
+    
+}
+
 - (BOOL)textField:(UITextField *)textField shouldChangeCharactersInRange:(NSRange)range replacementString:(NSString *)string
 {
+    if ([textField isKindOfClass:[VENBackspaceTextField class]] &&
+        [self isBackspacePressInTextField:textField range:range replacementString:string]) {
+        [self textFieldDidEnterBackspace:(VENBackspaceTextField *)textField];
+        return NO;
+    }
+
     [self unhighlightAllTokens];
     NSString *newString = [textField.text stringByReplacingCharactersInRange:range withString:string];
     for (NSString *delimiter in self.delimiters) {
@@ -581,6 +628,13 @@ static const CGFloat VENTokenFieldDefaultMaxHeight          = 150.0;
         }
     }
     return YES;
+}
+
+- (BOOL)isBackspacePressInTextField:(UITextField *)textField range:(NSRange)range replacementString:(NSString *)string {
+    return textField.text.length == 0 &&
+    range.location == 0 &&
+    range.length == 0 &&
+    string.length == 0;
 }
 
 
